@@ -2,18 +2,12 @@ import React, { useEffect, useState, useRef } from "react";
 import API from "../services/api";
 import { connectSocket, getSocket } from "../socket";
 
-// Wallpaper
 const chatWallpapers = {
   blue: "bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-800/30 dark:to-blue-700/40",
 };
 
-// Avatar
 function Avatar({ name }) {
-  const initials = name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
+  const initials = name.split(" ").map((n) => n[0]).join("").toUpperCase();
   return (
     <div className="w-10 h-10 flex items-center justify-center rounded-full bg-white/60 dark:bg-gray-700 text-blue-600 dark:text-white font-bold shadow">
       {initials}
@@ -21,7 +15,6 @@ function Avatar({ name }) {
   );
 }
 
-// Ticks
 function MsgTick({ status }) {
   return (
     <span className="text-[14px] ml-1">
@@ -32,7 +25,6 @@ function MsgTick({ status }) {
   );
 }
 
-// Reply bubble
 function ReplyBlock({ reply }) {
   if (!reply) return null;
   const myId = JSON.parse(localStorage.getItem("user"))._id;
@@ -60,53 +52,38 @@ export default function Chat() {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState(null);
-
   const [dark, setDark] = useState(localStorage.getItem("darkMode") === "true");
   const [openOptionsFor, setOpenOptionsFor] = useState(null);
 
   const bottomRef = useRef(null);
 
-  // Dark Mode
   useEffect(() => {
-    dark
-      ? document.documentElement.classList.add("dark")
-      : document.documentElement.classList.remove("dark");
+    dark ? document.documentElement.classList.add("dark") : document.documentElement.classList.remove("dark");
     localStorage.setItem("darkMode", dark);
   }, [dark]);
 
-  // Socket
   useEffect(() => {
     const s = connectSocket(token);
+    s.on("connect", () => s.emit("userConnected", me._id));
 
-    s.on("connect", () => {
-      s.emit("userConnected", me._id);
-    });
-
-    // New message
     s.on("newMessage", (msg) => {
       if (!current) return;
       const active = [me._id, current._id].sort().join("_");
       const room = [msg.sender, msg.receiver].sort().join("_");
-
       if (active === room) {
         setMessages((p) => [...p, msg]);
         scrollBottom();
       }
     });
 
-    // Deleted message update
     s.on("messageDeleted", ({ messageId, forEveryone, userId }) => {
       setMessages((prev) =>
         prev.map((m) => {
           if (m._id !== messageId) return m;
 
-          if (forEveryone) {
-            return { ...m, text: "", deletedForEveryone: true };
-          }
+          if (forEveryone) return { ...m, text: "", deletedForEveryone: true };
 
-          if (userId === me._id) {
-            return { ...m, deletedForMe: true };
-          }
+          if (userId === me._id) return { ...m, deletedForMe: true };
 
           return m;
         })
@@ -116,34 +93,33 @@ export default function Chat() {
     return () => s.disconnect();
   }, [current]);
 
-  // Load Users
   useEffect(() => {
-    API.get("/users/all").then((res) =>
-      setUsers(res.data.filter((u) => u._id !== me._id))
-    );
+    API.get("/users/all").then((res) => setUsers(res.data.filter((u) => u._id !== me._id)));
   }, []);
 
-  const scrollBottom = () =>
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
+  const scrollBottom = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
 
-  // Open Chat
   const openChat = async (u) => {
     setCurrent(u);
+
     getSocket().emit("joinRoom", { userId1: me._id, userId2: u._id });
 
     const res = await API.get(`/messages/${me._id}/${u._id}`);
     setMessages(res.data);
 
+    getSocket().emit("markAsSeen", { sender: me._id, receiver: u._id });
+
     scrollBottom();
   };
 
-  // Send message
+  // ⭐⭐⭐ FIXED sendMsg()
   const sendMsg = () => {
     if (!text.trim() || !current) return;
 
-    const tempId = Date.now();
-    const payload = {
-      _id: tempId,
+    const localId = Date.now();
+
+    const tempMsg = {
+      _id: localId,
       sender: me._id,
       receiver: current._id,
       text,
@@ -152,15 +128,21 @@ export default function Chat() {
       createdAt: new Date().toISOString(),
     };
 
-    setMessages((p) => [...p, payload]);
-    getSocket().emit("privateMessage", payload);
+    setMessages((p) => [...p, tempMsg]);
+
+    // 🚀 CORRECT FORMAT FOR BACKEND  
+    getSocket().emit("privateMessage", {
+      sender: me._id,
+      receiver: current._id,
+      text,
+      replyTo,
+    });
 
     setText("");
     setReplyTo(null);
     scrollBottom();
   };
 
-  // Delete message
   const deleteMessage = (msg, forEveryone) => {
     getSocket().emit("deleteMessage", {
       messageId: msg._id,
@@ -175,19 +157,13 @@ export default function Chat() {
     u.name.toLowerCase().includes(searchUser.toLowerCase())
   );
 
-  // UI
   return (
     <div className="flex w-screen h-screen bg-gray-100 dark:bg-gray-950 p-4 gap-4">
-      
       {/* SIDEBAR */}
       <div className="w-80 bg-white/80 dark:bg-gray-900/70 rounded-3xl p-5 shadow-xl flex flex-col">
-
         <div className="flex justify-between items-center mb-3">
           <h2 className="text-xl font-bold">Chats</h2>
-          <button
-            onClick={() => setDark(!dark)}
-            className="p-2 rounded-full bg-gray-200 dark:bg-gray-700"
-          >
+          <button onClick={() => setDark(!dark)} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700">
             {dark ? "🌙" : "☀️"}
           </button>
         </div>
@@ -206,9 +182,7 @@ export default function Chat() {
               key={u._id}
               onClick={() => openChat(u)}
               className={`p-3 rounded-xl cursor-pointer flex items-center gap-3 ${
-                current?._id === u._id
-                  ? "bg-blue-200 dark:bg-gray-700"
-                  : "bg-gray-200 dark:bg-gray-800"
+                current?._id === u._id ? "bg-blue-200 dark:bg-gray-700" : "bg-gray-200 dark:bg-gray-800"
               }`}
             >
               <Avatar name={u.name} />
@@ -221,10 +195,9 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* CHAT PANEL */}
+      {/* CHAT WINDOW */}
       <div className="flex-1 bg-white/80 dark:bg-gray-900/70 rounded-3xl shadow-xl flex flex-col overflow-hidden">
 
-        {/* HEADER */}
         <div className="h-20 flex items-center px-6 border-b dark:border-gray-700">
           {current ? (
             <div className="flex items-center gap-3">
@@ -239,18 +212,20 @@ export default function Chat() {
           )}
         </div>
 
-        {/* MESSAGES */}
         <div className={`flex-1 overflow-y-auto p-6 space-y-4 ${chatWallpapers.blue}`}>
-
           {messages.map((msg) => {
             const mine = msg.sender === me._id;
 
-            // DELETE FOR ME → hide
-            if (msg.deletedForMe) return null;
+            if (msg.deletedForEveryone) {
+              return (
+                <p key={msg._id} className={`italic text-xs text-gray-500 ${mine ? "text-right" : ""}`}>
+                  Message deleted
+                </p>
+              );
+            }
 
             return (
               <div key={msg._id} className={`relative flex ${mine ? "justify-end" : "justify-start"}`}>
-
                 <div
                   onDoubleClick={() => setReplyTo(msg)}
                   onContextMenu={(e) => {
@@ -263,29 +238,16 @@ export default function Chat() {
                       : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none"
                   }`}
                 >
-                  
-                  {/* Deleted For Everyone */}
-                  {msg.deletedForEveryone ? (
-                    <p className="italic text-xs text-gray-300 dark:text-gray-500">
-                      Message deleted
-                    </p>
-                  ) : (
-                    <>
-                      {msg.replyTo && <ReplyBlock reply={msg.replyTo} />}
-                      {msg.text}
-                    </>
-                  )}
+                  {msg.replyTo && <ReplyBlock reply={msg.replyTo} />}
+                  {msg.text}
 
                   <div className="text-[10px] mt-1 flex items-center justify-end opacity-80">
-                    {new Date(msg.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     {mine && <MsgTick status={msg.status} />}
                   </div>
                 </div>
 
-                {/* DELETE MENU */}
+                {/* OPTIONS MENU */}
                 {openOptionsFor === msg._id && (
                   <div className="absolute top-0 right-0 bg-white dark:bg-gray-800 border rounded-lg p-2 shadow-xl z-50">
                     <button
@@ -295,7 +257,7 @@ export default function Chat() {
                       Delete for me
                     </button>
 
-                    {mine && !msg.deletedForEveryone && (
+                    {mine && (
                       <button
                         onClick={() => deleteMessage(msg, true)}
                         className="block w-full text-left px-2 py-1 text-sm text-red-600 hover:bg-gray-200 dark:hover:bg-gray-700"
@@ -319,7 +281,6 @@ export default function Chat() {
           <div ref={bottomRef}></div>
         </div>
 
-        {/* Reply Preview */}
         {replyTo && (
           <div className="px-4 py-2 bg-blue-100 dark:bg-gray-700 flex justify-between items-center">
             <div className="text-sm">Replying to: <b>{replyTo.text}</b></div>
@@ -327,20 +288,18 @@ export default function Chat() {
           </div>
         )}
 
-        {/* INPUT */}
-        {current && (
-          <div className="h-20 flex items-center gap-3 px-4 border-t dark:border-gray-700 bg-white/70 dark:bg-gray-800">
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="flex-1 p-3 rounded-xl bg-gray-200 dark:bg-gray-700"
-              placeholder="Type a message…"
-            />
-            <button onClick={sendMsg} className="px-6 py-3 bg-blue-600 text-white rounded-xl">
-              Send
-            </button>
-          </div>
-        )}
+        <div className="h-20 flex items-center gap-3 px-4 border-t dark:border-gray-700 bg-white/70 dark:bg-gray-800">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="flex-1 p-3 rounded-xl bg-gray-200 dark:bg-gray-700"
+            placeholder="Type a message…"
+          />
+          <button onClick={sendMsg} className="px-6 py-3 bg-blue-600 text-white rounded-xl">
+            Send
+          </button>
+        </div>
+
       </div>
     </div>
   );
