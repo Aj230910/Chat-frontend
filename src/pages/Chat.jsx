@@ -6,6 +6,7 @@ const chatWallpapers = {
   blue: "bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/50 dark:to-blue-800/50",
 };
 
+// Avatar
 function Avatar({ name }) {
   const initials = name
     .split(" ")
@@ -21,7 +22,7 @@ function Avatar({ name }) {
 }
 
 export default function Chat() {
-  const me = JSON.parse(localStorage.getItem("user")); // MUST HAVE _id
+  const me = JSON.parse(localStorage.getItem("user"));
   const token = localStorage.getItem("token");
 
   const [users, setUsers] = useState([]);
@@ -29,12 +30,11 @@ export default function Chat() {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [search, setSearch] = useState("");
-
   const [dark, setDark] = useState(localStorage.getItem("darkMode") === "true");
 
   const bottomRef = useRef(null);
 
-  // 🌙 DARK MODE
+  // DARK MODE
   useEffect(() => {
     dark
       ? document.documentElement.classList.add("dark")
@@ -43,32 +43,32 @@ export default function Chat() {
     localStorage.setItem("darkMode", dark);
   }, [dark]);
 
-  // 🔌 SOCKET SETUP
+  // CONNECT SOCKET
   useEffect(() => {
     const s = connectSocket(token);
 
     s.on("connect", () => {
-      console.log("⚡ Socket connected:", s.id);
+      console.log("⚡ Connected:", s.id);
       s.emit("userConnected", me._id);
     });
 
-    // ⭐ NEW MESSAGE RECEIVED
+    // RECEIVE MESSAGE
     s.on("newMessage", (msg) => {
       if (!current) return;
 
-      const myRoom = [me._id, current._id].sort().join("_");
+      const activeRoom = [me._id, current._id].sort().join("_");
       const msgRoom = [msg.sender, msg.receiver].sort().join("_");
 
-      if (myRoom === msgRoom) {
+      if (activeRoom === msgRoom) {
         setMessages((prev) => [...prev, msg]);
         scrollBottom();
       }
     });
 
     return () => s.disconnect();
-  }, [current]);
+  }, [current?._id]);
 
-  // ⭐ LOAD USERS
+  // LOAD USERS
   useEffect(() => {
     API.get("/users/all").then((res) =>
       setUsers(res.data.filter((u) => u._id !== me._id))
@@ -76,14 +76,13 @@ export default function Chat() {
   }, []);
 
   const scrollBottom = () =>
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
 
-  // ⭐ OPEN CHAT + LOAD OLD MESSAGES
+  // OPEN CHAT + LOAD MESSAGES
   const openChat = async (u) => {
     setCurrent(u);
 
-    const room = { userId1: me._id, userId2: u._id };
-    getSocket().emit("joinRoom", room);
+    getSocket().emit("joinRoom", { userId1: me._id, userId2: u._id });
 
     const res = await API.get(`/messages/${me._id}/${u._id}`);
     setMessages(res.data);
@@ -91,20 +90,20 @@ export default function Chat() {
     scrollBottom();
   };
 
-  // ⭐ SEND MESSAGE (FULLY FIXED)
+  // SEND MESSAGE
   const sendMsg = () => {
     if (!text.trim() || !current) return;
 
     const payload = {
-      sender: me._id,        // ✔ CORRECT ID
-      receiver: current._id, // ✔ CORRECT ID
+      sender: me._id,
+      receiver: current._id,
       text,
     };
 
-    // Send to backend
+    // send to backend
     getSocket().emit("privateMessage", payload);
 
-    // Show instantly
+    // show immediately
     setMessages((prev) => [
       ...prev,
       { ...payload, createdAt: new Date().toISOString() },
@@ -114,7 +113,6 @@ export default function Chat() {
     scrollBottom();
   };
 
-  // ⭐ FILTER USERS
   const filteredUsers = users.filter((u) =>
     u.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -153,7 +151,7 @@ export default function Chat() {
           className="p-2 rounded-xl bg-gray-200 dark:bg-gray-800 mb-4"
         />
 
-        {/* USER LIST */}
+        {/* USERS */}
         <div className="overflow-y-auto space-y-3">
           {filteredUsers.map((u) => (
             <div
@@ -175,7 +173,7 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* CHAT WINDOW */}
+      {/* CHAT PANEL */}
       <div className="flex-1 bg-white/80 dark:bg-gray-900/70 rounded-3xl shadow-xl flex flex-col overflow-hidden">
 
         {/* HEADER */}
