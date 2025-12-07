@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+html.dark {
+  color-scheme: dark;
+}
+
+@layer utilities {
+  .msg-animate {
+    @apply opacity-0 translate-y-3 transition-all duration-300 ease-out;
+  }
+  .msg-show {
+    @apply opacity-100 translate-y-0;
+  }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.4s ease;
+}
+
+.msg-animate {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: all 0.25s ease-out;
+}
+
+.msg-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* theme classes — body gets theme-{key} class */
+.theme-blue {
+  background: linear-gradient(180deg, rgba(59,130,246,0.08), rgba(14,21,32,1));
+}
+.theme-purple {
+  background: linear-gradient(180deg, rgba(139,92,246,0.08), rgba(18,14,40,1));
+}
+.theme-sunset {
+  background: linear-gradient(180deg, rgba(253,187,45,0.06), rgba(40,16,23,1));
+}
+.theme-green {
+  background: linear-gradient(180deg, rgba(16,185,129,0.06), rgba(4,28,26,1));
+}
+
+/* small niceties */
+body.theme-blue, body.theme-purple, body.theme-sunset, body.theme-green {
+  transition: background 300ms ease;
+}
+
+.dark-transition {
+  transition: 
+    background-color 0.35s ease,
+    color 0.35s ease,
+    border-color 0.35s ease,
+    box-shadow 0.35s ease;
+}
+
+.theme-fade {
+  animation: themeFade 0.35s ease;
+}
+
+@keyframes themeFade {
+  from {
+    opacity: 0.4;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
