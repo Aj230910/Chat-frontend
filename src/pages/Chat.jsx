@@ -2,12 +2,10 @@ import React, { useEffect, useState, useRef } from "react";
 import API from "../services/api";
 import { connectSocket, getSocket } from "../socket";
 
-// Wallpapers
 const chatWallpapers = {
   blue: "bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/50 dark:to-blue-800/50",
 };
 
-// Avatar
 function Avatar({ name }) {
   const initials = name
     .split(" ")
@@ -23,20 +21,20 @@ function Avatar({ name }) {
 }
 
 export default function Chat() {
-  const me = JSON.parse(localStorage.getItem("user"));
+  const me = JSON.parse(localStorage.getItem("user")); // MUST HAVE _id
   const token = localStorage.getItem("token");
 
   const [users, setUsers] = useState([]);
   const [current, setCurrent] = useState(null);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
-
   const [search, setSearch] = useState("");
+
   const [dark, setDark] = useState(localStorage.getItem("darkMode") === "true");
 
   const bottomRef = useRef(null);
 
-  // DARK MODE
+  // 🌙 DARK MODE
   useEffect(() => {
     dark
       ? document.documentElement.classList.add("dark")
@@ -45,23 +43,23 @@ export default function Chat() {
     localStorage.setItem("darkMode", dark);
   }, [dark]);
 
-  // CONNECT SOCKET
+  // 🔌 SOCKET SETUP
   useEffect(() => {
     const s = connectSocket(token);
 
     s.on("connect", () => {
-      console.log("⚡ Connected:", s.id);
+      console.log("⚡ Socket connected:", s.id);
       s.emit("userConnected", me._id);
     });
 
-    // NEW MESSAGE LISTENER
+    // ⭐ NEW MESSAGE RECEIVED
     s.on("newMessage", (msg) => {
       if (!current) return;
 
-      const activeRoom = [me._id, current._id].sort().join("_");
+      const myRoom = [me._id, current._id].sort().join("_");
       const msgRoom = [msg.sender, msg.receiver].sort().join("_");
 
-      if (activeRoom === msgRoom) {
+      if (myRoom === msgRoom) {
         setMessages((prev) => [...prev, msg]);
         scrollBottom();
       }
@@ -70,7 +68,7 @@ export default function Chat() {
     return () => s.disconnect();
   }, [current]);
 
-  // LOAD USERS
+  // ⭐ LOAD USERS
   useEffect(() => {
     API.get("/users/all").then((res) =>
       setUsers(res.data.filter((u) => u._id !== me._id))
@@ -78,16 +76,14 @@ export default function Chat() {
   }, []);
 
   const scrollBottom = () =>
-    setTimeout(
-      () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
-      80
-    );
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
-  // OPEN CHAT
+  // ⭐ OPEN CHAT + LOAD OLD MESSAGES
   const openChat = async (u) => {
     setCurrent(u);
 
-    getSocket().emit("joinRoom", { userId1: me._id, userId2: u._id });
+    const room = { userId1: me._id, userId2: u._id };
+    getSocket().emit("joinRoom", room);
 
     const res = await API.get(`/messages/${me._id}/${u._id}`);
     setMessages(res.data);
@@ -95,20 +91,20 @@ export default function Chat() {
     scrollBottom();
   };
 
-  // SEND MESSAGE
+  // ⭐ SEND MESSAGE (FULLY FIXED)
   const sendMsg = () => {
     if (!text.trim() || !current) return;
 
     const payload = {
-      sender: me._id,
-      receiver: current._id,
+      sender: me._id,        // ✔ CORRECT ID
+      receiver: current._id, // ✔ CORRECT ID
       text,
     };
 
-    // 1️⃣ Send to backend
+    // Send to backend
     getSocket().emit("privateMessage", payload);
 
-    // 2️⃣ Add to UI immediately
+    // Show instantly
     setMessages((prev) => [
       ...prev,
       { ...payload, createdAt: new Date().toISOString() },
@@ -118,21 +114,16 @@ export default function Chat() {
     scrollBottom();
   };
 
-  // FILTER USERS
+  // ⭐ FILTER USERS
   const filteredUsers = users.filter((u) =>
     u.name.toLowerCase().includes(search.toLowerCase())
   );
-
-  // ------------------------
-  //       DESKTOP UI
-  // ------------------------
 
   return (
     <div className="w-screen h-screen flex bg-gray-100 dark:bg-gray-950 p-4 gap-4">
 
       {/* SIDEBAR */}
       <div className="w-80 bg-white/80 dark:bg-gray-900/70 rounded-3xl p-5 shadow-xl flex flex-col">
-
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Chats</h2>
 
@@ -168,7 +159,7 @@ export default function Chat() {
             <div
               key={u._id}
               onClick={() => openChat(u)}
-              className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer ${
+              className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer ${
                 current?._id === u._id
                   ? "bg-blue-200 dark:bg-gray-700"
                   : "bg-gray-200 dark:bg-gray-800"
@@ -184,7 +175,7 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* CHAT PANEL */}
+      {/* CHAT WINDOW */}
       <div className="flex-1 bg-white/80 dark:bg-gray-900/70 rounded-3xl shadow-xl flex flex-col overflow-hidden">
 
         {/* HEADER */}
@@ -192,10 +183,7 @@ export default function Chat() {
           {current ? (
             <div className="flex items-center gap-3">
               <Avatar name={current.name} />
-              <div>
-                <p className="text-lg font-semibold">{current.name}</p>
-                <p className="text-xs text-gray-500">Online</p>
-              </div>
+              <p className="text-lg font-semibold">{current.name}</p>
             </div>
           ) : (
             <p className="text-gray-500">Select a chat</p>
@@ -203,19 +191,13 @@ export default function Chat() {
         </div>
 
         {/* MESSAGES */}
-        <div
-          className={`flex-1 overflow-y-auto p-6 space-y-4 ${chatWallpapers.blue}`}
-        >
+        <div className={`flex-1 overflow-y-auto p-6 space-y-4 ${chatWallpapers.blue}`}>
           {messages.map((msg, i) => {
             const mine = msg.sender === me._id;
 
             return (
-              <div
-                key={i}
-                className={`flex ${mine ? "justify-end" : "justify-start"}`}
-              >
+              <div key={i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                 <div
-                  title={new Date(msg.createdAt).toLocaleString()}
                   className={`max-w-xs px-4 py-3 rounded-2xl text-sm shadow-xl ${
                     mine
                       ? "bg-blue-600 text-white rounded-br-none"
@@ -224,7 +206,7 @@ export default function Chat() {
                 >
                   {msg.text}
 
-                  <div className="text-[10px] mt-1 opacity-80 text-right">
+                  <div className="text-[10px] mt-1 opacity-60 text-right">
                     {new Date(msg.createdAt).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
@@ -234,7 +216,6 @@ export default function Chat() {
               </div>
             );
           })}
-
           <div ref={bottomRef}></div>
         </div>
 
