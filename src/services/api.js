@@ -1,8 +1,8 @@
 import axios from "axios";
 
 const API = axios.create({
- baseURL: "https://chat-backend-727p.onrender.com/api",
-
+  baseURL: import.meta.env.VITE_BACKEND_URL + "/api",
+  withCredentials: true,
 });
 
 API.interceptors.request.use((config) => {
